@@ -337,6 +337,7 @@ case $1 in
 
   *)
     log "usage: docker-seamless-osx { install | uninstall }"
+    log " docs: https://github.com/mjpizz/docker-seamless-osx/blob/master/README.md"
     ;;
 
 esac
