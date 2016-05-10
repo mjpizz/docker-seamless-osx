@@ -1,0 +1,343 @@
+#!/bin/sh
+
+set -e
+
+DOCKER_SEAMLESS_OSX_PROFILE=~/.profile
+DOCKER_SEAMLESS_OSX_SSH_AGENT_SOCK=/tmp/docker-seamless-osx-ssh-agent.sock
+
+#############################################################################
+# Console Logging
+#############################################################################
+
+log() {
+
+  echo "$@" 1>&2;
+}
+
+log_to_console() {
+
+  log "$@"
+  if [ -z $DOCKER_SEAMLESS_OSX_CONSOLE_LOG_NAMESPACE ]; then
+    log_prefix="docker-seamless-osx"
+  else
+    log_prefix="docker-seamless-osx.$DOCKER_SEAMLESS_OSX_CONSOLE_LOG_NAMESPACE"
+  fi
+  syslog -s -k Sender $log_prefix Level Notice Message "$@"
+}
+
+#############################################################################
+# Helpers for launchd jobs
+# http://launchd.info
+#############################################################################
+
+install_launchd_job() {
+
+  name=$1
+  command=$2
+
+  plist_path=~/Library/LaunchAgents/com.docker-seamless-osx.$name.plist
+  uninstall_launchd_job $name
+
+  # TODO: figure out a way to pipe stdout/stderr to syslog
+  cat > $plist_path <<- EOM
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+
+    <key>Label</key>
+      <string>com.docker-seamless-osx.$name</string>
+
+    <key>ProgramArguments</key>
+      <array>
+        <string>$(which \docker-seamless-osx)</string>
+        <string>$command</string>
+      </array>
+
+    <key>EnvironmentVariables</key>
+      <dict>
+        <key>PATH</key>
+          <string>/bin:/usr/bin:$(dirname `which \docker-machine`):$(dirname `which \docker`)</string>
+        <key>DOCKER_SEAMLESS_OSX_TARGET_MACHINE</key>
+          <string>$DOCKER_SEAMLESS_OSX_TARGET_MACHINE</string>
+        <key>DOCKER_SEAMLESS_OSX_CONSOLE_LOG_NAMESPACE</key>
+          <string>$name</string>
+      </dict>
+
+    <key>StandardOutPath</key>
+      <string>/dev/null</string>
+
+    <key>StandardErrorPath</key>
+      <string>/dev/null</string>
+
+    <key>RunAtLoad</key>
+      <true/>
+
+    <key>KeepAlive</key>
+      <true/>
+
+    <key>ThrottleInterval</key>
+      <integer>30</integer>
+
+  </dict>
+</plist>
+EOM
+
+  launchctl load $plist_path
+}
+
+uninstall_launchd_job() {
+
+  name=$1
+  plist_path=~/Library/LaunchAgents/com.docker-seamless-osx.$name.plist
+  if [ -f $plist_path ]; then
+    launchctl unload $plist_path
+    rm $plist_path
+  fi
+}
+
+assert_launchd_environment_is_ready() {
+
+  if [ -z $DOCKER_SEAMLESS_OSX_TARGET_MACHINE ]; then
+
+    log_to_console "DOCKER_SEAMLESS_OSX_TARGET_MACHINE required in launchd environment"
+    return 1
+
+  elif [ -z $DOCKER_SEAMLESS_OSX_CONSOLE_LOG_NAMESPACE ]; then
+
+    log_to_console "DOCKER_SEAMLESS_OSX_CONSOLE_LOG_NAMESPACE required in launchd environment"
+    return 1
+
+  else
+    return 0
+  fi
+}
+
+prepare_launchd_docker_machine_environment() {
+
+  is_ready=$(\docker-machine ssh $DOCKER_SEAMLESS_OSX_TARGET_MACHINE "echo 'yes'" 2>/dev/null || echo 'no')
+  if [ $is_ready = "no" ]; then
+    log_to_console "Target docker machine '$DOCKER_SEAMLESS_OSX_TARGET_MACHINE' is not ready, will retry"
+    exit 1
+  fi
+
+  eval $(\docker-machine env $DOCKER_SEAMLESS_OSX_TARGET_MACHINE)
+
+  if [ -z $DOCKER_MACHINE_NAME ]; then
+    log_to_console "DOCKER_MACHINE_NAME missing after attempting to eval environment"
+    exit 1
+  fi
+}
+
+restart_target_docker_machine_if_necessary() {
+
+  if [ $(\docker-machine status $DOCKER_SEAMLESS_OSX_TARGET_MACHINE) != Running ]; then
+    log_to_console "Target docker-machine '$DOCKER_SEAMLESS_OSX_TARGET_MACHINE' is not running, starting now"
+    \docker-machine start $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
+  fi
+}
+
+#############################################################################
+# Shell Environment
+#############################################################################
+
+install_shell_environment() {
+
+  log_to_console "Installing shell environment to $DOCKER_SEAMLESS_OSX_PROFILE"
+
+  command="docker-seamless-osx env $DOCKER_SEAMLESS_OSX_TARGET_MACHINE"
+  remove_shell_environment_line
+  echo "\neval \$($command)" >> $DOCKER_SEAMLESS_OSX_PROFILE
+}
+
+uninstall_shell_environment() {
+
+  log_to_console "Uninstalling shell environment from $DOCKER_SEAMLESS_OSX_PROFILE"
+  remove_shell_environment_line
+}
+
+remove_shell_environment_line() {
+
+  tmp=`mktemp /tmp/config.XXXXXXXXXX`
+  grep -v "docker-seamless-osx env" $DOCKER_SEAMLESS_OSX_PROFILE > $tmp
+  mv $tmp $DOCKER_SEAMLESS_OSX_PROFILE
+}
+
+#############################################################################
+# Port Forwarding
+#############################################################################
+
+install_port_forwarding() {
+
+  log_to_console "Installing port forwarding to launchd"
+  install_launchd_job forward-ports launchd-forward-ports
+}
+
+uninstall_port_forwarding() {
+
+  log_to_console "Uninstalling port forwarding from launchd"
+  uninstall_launchd_job forward-ports
+}
+
+start_port_forwarding() {
+
+  log_to_console "Starting port forwarding for docker-machine $DOCKER_MACHINE_NAME"
+  forward_all_container_ports_from_virtualbox_to_localhost
+  \docker events --filter event=start | while read event; do
+    forward_all_container_ports_from_virtualbox_to_localhost
+  done
+}
+
+stop_port_forwarding() {
+
+  log_to_console "Stopping port forwarding for docker-machine $DOCKER_MACHINE_NAME"
+}
+
+forward_port_from_virtualbox_to_localhost() {
+
+  kind=$1
+  port=$2
+  name="docker-seamless-osx-$kind-$port"
+
+  forwarded=$(VBoxManage showvminfo $DOCKER_MACHINE_NAME |\
+    grep "host port = $port" | grep "protocol = $kind" >> /dev/null &&\
+    echo "F" || echo "x")
+
+  managed=$(VBoxManage showvminfo $DOCKER_MACHINE_NAME |\
+    grep "$name" >> /dev/null &&\
+    echo "M" || echo "x")
+
+  case "$forwarded$managed" in
+
+    FM)
+      log_to_console "Already forwarding $kind $port from VirtualBox"
+      ;;
+
+    Fx)
+      log_to_console "Unable to forward $kind $port from VirtualBox (already forwarded by another process)"
+      ;;
+
+    xx)
+      log_to_console "Forwarding $kind $port from VirtualBox"
+      VBoxManage controlvm $DOCKER_MACHINE_NAME natpf1 "$name,$kind,,$port,,$port"
+      ;;
+
+  esac
+}
+
+parse_container_ports_from_docker() {
+
+  kind=$1
+  \docker ps | tail -n+2 | awk '{print $1}' | xargs -n1 \docker port | grep $kind | awk -F: '{print $2}'
+}
+
+forward_all_container_ports_from_virtualbox_to_localhost() {
+
+  # TODO: clear all previously forwarded ports?
+  read -a tcp_ports <<< $(parse_container_ports_from_docker tcp)
+  read -a udp_ports <<< $(parse_container_ports_from_docker udp)
+  for tcp_port in "${tcp_ports[@]}"; do
+    forward_port_from_virtualbox_to_localhost tcp $tcp_port
+  done
+  for udp_port in "${udp_ports[@]}"; do
+    forward_port_from_virtualbox_to_localhost udp $udp_port
+  done
+}
+
+#############################################################################
+# SSH Agent Forwarding
+#############################################################################
+
+install_ssh_agent_forwarding() {
+
+  log_to_console "Installing ssh agent forwarding to launchd"
+  install_launchd_job forward-ssh-agent launchd-forward-ssh-agent
+}
+
+uninstall_ssh_agent_forwarding() {
+
+  log_to_console "Uninstalling ssh agent forwarding from launchd"
+  uninstall_launchd_job forward-ssh-agent
+}
+
+start_ssh_agent_forwarding() {
+
+  log_to_console "Starting ssh agent forwarding for docker-machine $DOCKER_MACHINE_NAME" 1>&2
+  \docker-machine ssh $DOCKER_MACHINE_NAME -A -t -M -S $DOCKER_SEAMLESS_OSX_SSH_AGENT_SOCK "\
+    sudo rm -rf $(dirname $SSH_AUTH_SOCK);\
+    sudo mkdir -p $(dirname $SSH_AUTH_SOCK);\
+    sudo ln -s \$SSH_AUTH_SOCK $SSH_AUTH_SOCK;\
+    tail -f /dev/null"
+}
+
+stop_ssh_agent_forwarding() {
+
+  log_to_console "Stopping ssh agent forwarding for docker-machine $DOCKER_MACHINE_NAME" 1>&2
+  \docker-machine ssh $DOCKER_MACHINE_NAME -S $DOCKER_SEAMLESS_OSX_SSH_AGENT_SOCK -O exit
+  \docker-machine ssh $DOCKER_MACHINE_NAME "sudo rm -rf $(dirname $SSH_AUTH_SOCK)"
+}
+
+#############################################################################
+# Commandline Handling
+#############################################################################
+
+set_target_docker_machine() {
+
+  if [ -z $1 ]; then
+    DOCKER_SEAMLESS_OSX_TARGET_MACHINE="default"
+  else
+    DOCKER_SEAMLESS_OSX_TARGET_MACHINE=$1
+  fi
+}
+
+case $1 in
+
+  launchd-forward-ports)
+
+    assert_launchd_environment_is_ready
+    prepare_launchd_docker_machine_environment
+
+    trap "stop_port_forwarding" EXIT
+    start_port_forwarding
+    ;;
+
+  launchd-forward-ssh-agent)
+
+    # Only the SSH Agent launchd job is allowed to restart the target
+    # docker machine to avoid a race condition with other launchd jobs.
+    assert_launchd_environment_is_ready
+    restart_target_docker_machine_if_necessary
+    prepare_launchd_docker_machine_environment
+
+    trap "stop_ssh_agent_forwarding" EXIT
+    start_ssh_agent_forwarding
+    ;;
+
+  env)
+
+    \docker-machine env $2
+    ;;
+
+  install)
+
+    set_target_docker_machine $2
+    install_shell_environment
+    install_port_forwarding
+    install_ssh_agent_forwarding
+    # TODO: offer to disable nested paging for better stability in OSX Yosemite?
+    # VBoxManage modifyvm $DOCKER_MACHINE_NAME --nestedpaging off
+    ;;
+
+  uninstall)
+
+    uninstall_shell_environment
+    uninstall_port_forwarding
+    uninstall_ssh_agent_forwarding
+    ;;
+
+  *)
+    log "usage: docker-seamless-osx { install | uninstall }"
+    ;;
+
+esac
+exit 0
