@@ -13,7 +13,7 @@ Make docker tools behave natively on OSX using `docker-seamless-osx`.
 
 To install:
 
-    curl https://raw.githubusercontent.com/mjpizz/docker-seamless-osx/master/docker-seamless-osx > /usr/local/bin/docker-seamless-osx
+    dest=/usr/local/bin/docker-seamless-osx && curl https://raw.githubusercontent.com/mjpizz/docker-seamless-osx/master/docker-seamless-osx > $dest && chmod +x $dest
     docker-seamless-osx install
 
 To uninstall:
