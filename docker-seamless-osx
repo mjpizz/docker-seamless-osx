@@ -91,8 +91,8 @@ uninstall_launchd_job() {
   name=$1
   plist_path=~/Library/LaunchAgents/com.docker-seamless-osx.$name.plist
   if [ -f $plist_path ]; then
-    launchctl unload $plist_path
-    rm $plist_path
+    launchctl unload "$plist_path"
+    rm "$plist_path"
   fi
 }
 
@@ -147,7 +147,7 @@ install_shell_environment() {
 
   command="docker-seamless-osx env $DOCKER_SEAMLESS_OSX_TARGET_MACHINE"
   remove_shell_environment_line
-  echo "\neval \$($command)" >> $DOCKER_SEAMLESS_OSX_PROFILE
+  echo "\neval \$($command)" >> "$DOCKER_SEAMLESS_OSX_PROFILE"
 }
 
 uninstall_shell_environment() {
@@ -160,7 +160,7 @@ remove_shell_environment_line() {
 
   tmp=`mktemp /tmp/config.XXXXXXXXXX`
   grep -v "docker-seamless-osx env" $DOCKER_SEAMLESS_OSX_PROFILE > $tmp
-  mv $tmp $DOCKER_SEAMLESS_OSX_PROFILE
+  mv $tmp "$DOCKER_SEAMLESS_OSX_PROFILE"
 }
 
 #############################################################################
