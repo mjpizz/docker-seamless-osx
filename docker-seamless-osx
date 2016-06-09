@@ -351,6 +351,9 @@ case $1 in
 
     # TODO: offer to disable nested paging for better stability in OSX Yosemite?
     # VBoxManage modifyvm $DOCKER_MACHINE_NAME --nestedpaging off
+
+    log_to_console "Installed docker-seamless-osx successfully"
+    log "Open a new terminal to start using docker"
     ;;
 
   uninstall)
@@ -358,6 +361,8 @@ case $1 in
     uninstall_shell_environment
     uninstall_port_forwarding
     uninstall_ssh_agent_forwarding
+
+    log_to_console "Uninstalled docker-seamless-osx successfully"
     ;;
 
   *)
