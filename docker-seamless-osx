@@ -199,6 +199,7 @@ uninstall_port_forwarding() {
 
   log_to_console "Uninstalling port forwarding from launchd"
   uninstall_launchd_job forward-ports
+  remove_port_forwarding_entries_from_virtualbox
 }
 
 start_port_forwarding() {
@@ -255,7 +256,6 @@ parse_container_ports_from_docker() {
 
 forward_all_container_ports_from_virtualbox_to_localhost() {
 
-  # TODO: clear all previously forwarded ports?
   read -a tcp_ports <<< $(parse_container_ports_from_docker tcp)
   read -a udp_ports <<< $(parse_container_ports_from_docker udp)
   for tcp_port in "${tcp_ports[@]}"; do
@@ -263,6 +263,20 @@ forward_all_container_ports_from_virtualbox_to_localhost() {
   done
   for udp_port in "${udp_ports[@]}"; do
     forward_port_from_virtualbox_to_localhost udp $udp_port
+  done
+}
+
+remove_port_forwarding_entries_from_virtualbox() {
+
+  if [ -z $DOCKER_SEAMLESS_OSX_TARGET_MACHINE ]; then
+    log_to_console "Removing port forwarding requires DOCKER_SEAMLESS_OSX_TARGET_MACHINE to be set"
+    exit 1
+  fi
+
+  dump_command="VBoxManage showvminfo $DOCKER_SEAMLESS_OSX_TARGET_MACHINE"
+  $dump_command | grep "NIC 1 Rule" | grep "docker-seamless-osx-" | while read entry; do
+    name=$(echo "$entry" | awk '{print $6}' | awk -F, '{print $1}')
+    VBoxManage controlvm $DOCKER_MACHINE_NAME natpf1 delete $name
   done
 }
 
@@ -362,6 +376,7 @@ case $1 in
 
     trap 'if [[ $? -ne 0 ]]; then log_to_console "Failed to uninstall docker-seamless-osx"; fi' EXIT
 
+    set_target_docker_machine $2
 
     uninstall_shell_environment
     uninstall_port_forwarding
