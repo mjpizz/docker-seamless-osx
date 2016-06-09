@@ -350,6 +350,47 @@ stop_ssh_agent_forwarding() {
 }
 
 #############################################################################
+# Host DNS Resolution
+# needed for proper DNS resolution with some VPN setups
+# https://www.virtualbox.org/manual/ch09.html#nat_host_resolver_proxy
+#############################################################################
+
+install_host_dns_resolution() {
+
+  log_to_console "Installing host DNS resolution for Machine \"$DOCKER_SEAMLESS_OSX_TARGET_MACHINE\""
+
+  dump_command="VBoxManage debugvm $DOCKER_SEAMLESS_OSX_TARGET_MACHINE info cfgm"
+  host_resolver_value=$($dump_command | grep UseHostResolver | grep -o -e '([0-9])')
+
+  if [ $host_resolver_value != "(1)" ]; then
+
+    append_settings virtualbox-dns-uninstalls.txt "$DOCKER_SEAMLESS_OSX_TARGET_MACHINE --natdnshostresolver1 off"
+
+    log_to_console "Stopping Machine \"$machine\" temporarily to modify host DNS resolution settings"
+    ensure_docker_machine_is_stopped $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
+    VBoxManage modifyvm $DOCKER_SEAMLESS_OSX_TARGET_MACHINE --natdnshostresolver1 on
+    ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
+  fi
+}
+
+uninstall_host_dns_resolution() {
+
+  log_to_console "Uninstalling host DNS resolution"
+
+  read_settings virtualbox-dns-uninstalls.txt | while read entry; do
+
+    fields=($entry)
+    machine=${fields[0]}
+    key=${fields[1]}
+    value=${fields[2]}
+
+    log_to_console "Stopping Machine \"$machine\" to restore original settings for DNS resolution"
+    ensure_docker_machine_is_stopped $machine
+    VBoxManage modifyvm "$machine" "$key" "$value"
+  done
+}
+
+#############################################################################
 # Commandline Handling
 #############################################################################
 
@@ -398,6 +439,11 @@ case $1 in
     create_settings_directory
     ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
 
+    # Install host DNS resolution first because it may turn off
+    # the Docker Machine temporarily to make modifications. The
+    # other installers expect the Machine to be running.
+    install_host_dns_resolution
+
     install_shell_environment
     install_port_forwarding
     install_ssh_agent_forwarding
@@ -418,6 +464,12 @@ case $1 in
     uninstall_shell_environment
     uninstall_port_forwarding
     uninstall_ssh_agent_forwarding
+
+    # Uninstall host DNS resolution last because it may turn off
+    # the Docker Machine to make modifications. Otherwise, the other
+    # parts of the installation may try to automatically restart
+    # the Machine during uninstallation.
+    uninstall_host_dns_resolution
 
     remove_settings_directory
 
