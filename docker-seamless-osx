@@ -342,6 +342,8 @@ case $1 in
 
   install)
 
+    trap 'if [[ $? -ne 0 ]]; then log_to_console "Failed to install docker-seamless-osx"; fi' EXIT
+
     set_target_docker_machine $2
     ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
 
@@ -352,17 +354,20 @@ case $1 in
     # TODO: offer to disable nested paging for better stability in OSX Yosemite?
     # VBoxManage modifyvm $DOCKER_MACHINE_NAME --nestedpaging off
 
-    log_to_console "Installed docker-seamless-osx successfully"
+    log_to_console "Successfully installed docker-seamless-osx"
     log "Open a new terminal to start using docker"
     ;;
 
   uninstall)
 
+    trap 'if [[ $? -ne 0 ]]; then log_to_console "Failed to uninstall docker-seamless-osx"; fi' EXIT
+
+
     uninstall_shell_environment
     uninstall_port_forwarding
     uninstall_ssh_agent_forwarding
 
-    log_to_console "Uninstalled docker-seamless-osx successfully"
+    log_to_console "Successfully uninstalled docker-seamless-osx"
     ;;
 
   *)
