@@ -129,11 +129,33 @@ prepare_launchd_docker_machine_environment() {
   fi
 }
 
-restart_target_docker_machine_if_necessary() {
+#############################################################################
+# Helpers for managing Docker Machines
+#############################################################################
 
-  if [ $(\docker-machine status $DOCKER_SEAMLESS_OSX_TARGET_MACHINE) != Running ]; then
-    log_to_console "Target docker-machine '$DOCKER_SEAMLESS_OSX_TARGET_MACHINE' is not running, starting now"
-    \docker-machine start $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
+ensure_docker_machine_is_running() {
+
+  machine=$1
+  if [ -z $machine ]; then
+    log_to_console "No docker-machine specified"
+    exit 1
+  fi
+
+  if [ $(\docker-machine status $machine) = Stopped ]; then
+    \docker-machine start $machine | while read line; do log "--> $line"; done
+  fi
+}
+
+ensure_docker_machine_is_stopped() {
+
+  machine=$1
+  if [ -z $machine ]; then
+    log_to_console "No docker-machine specified"
+    exit 1
+  fi
+
+  if [ $(\docker-machine status $machine) = Running ]; then
+    \docker-machine stop $machine | while read line; do log "--> $line"; done
   fi
 }
 
@@ -306,7 +328,7 @@ case $1 in
     # Only the SSH Agent launchd job is allowed to restart the target
     # docker machine to avoid a race condition with other launchd jobs.
     assert_launchd_environment_is_ready
-    restart_target_docker_machine_if_necessary
+    ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
     prepare_launchd_docker_machine_environment
 
     trap "stop_ssh_agent_forwarding" EXIT
@@ -321,9 +343,12 @@ case $1 in
   install)
 
     set_target_docker_machine $2
+    ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
+
     install_shell_environment
     install_port_forwarding
     install_ssh_agent_forwarding
+
     # TODO: offer to disable nested paging for better stability in OSX Yosemite?
     # VBoxManage modifyvm $DOCKER_MACHINE_NAME --nestedpaging off
     ;;
