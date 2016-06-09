@@ -4,6 +4,7 @@ set -e
 
 DOCKER_SEAMLESS_OSX_PROFILE=~/.profile
 DOCKER_SEAMLESS_OSX_SSH_AGENT_SOCK=/tmp/docker-seamless-osx-ssh-agent.sock
+DOCKER_SEAMLESS_OSX_SETTINGS_DIR=~/Library/Application\ Support/docker-seamless-osx
 
 #############################################################################
 # Console Logging
@@ -157,6 +158,41 @@ ensure_docker_machine_is_stopped() {
   if [ $(\docker-machine status $machine) = Running ]; then
     \docker-machine stop $machine | while read line; do log "--> $line"; done
   fi
+}
+
+#############################################################################
+# Helpers for managing settings
+#############################################################################
+
+append_settings() {
+
+  filename=$1
+  value=$2
+  settings_file=$DOCKER_SEAMLESS_OSX_SETTINGS_DIR/$filename
+
+  echo "$value" >> "$settings_file"
+}
+
+read_settings() {
+
+  filename=$1
+  settings_file=$DOCKER_SEAMLESS_OSX_SETTINGS_DIR/$filename
+
+  if [ -f "$settings_file" ]; then
+    cat "$settings_file"
+  fi
+}
+
+create_settings_directory() {
+
+  log_to_console "Creating settings directory in '$DOCKER_SEAMLESS_OSX_SETTINGS_DIR'"
+  mkdir -p "$DOCKER_SEAMLESS_OSX_SETTINGS_DIR"
+}
+
+remove_settings_directory() {
+
+  log_to_console "Removing settings directory from '$DOCKER_SEAMLESS_OSX_SETTINGS_DIR'"
+  rm -rf "$DOCKER_SEAMLESS_OSX_SETTINGS_DIR"
 }
 
 #############################################################################
@@ -359,6 +395,7 @@ case $1 in
     trap 'if [[ $? -ne 0 ]]; then log_to_console "Failed to install docker-seamless-osx"; fi' EXIT
 
     set_target_docker_machine $2
+    create_settings_directory
     ensure_docker_machine_is_running $DOCKER_SEAMLESS_OSX_TARGET_MACHINE
 
     install_shell_environment
@@ -381,6 +418,8 @@ case $1 in
     uninstall_shell_environment
     uninstall_port_forwarding
     uninstall_ssh_agent_forwarding
+
+    remove_settings_directory
 
     log_to_console "Successfully uninstalled docker-seamless-osx"
     ;;
