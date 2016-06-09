@@ -26,16 +26,15 @@ Your Docker container often needs the same level of SSH access that your local m
 
 Using SSH_AUTH_SOCK, you can grant your `docker` container proper SSH access:
 
-    docker run --volume $SSH_AUTH_SOCK:/port --env SSH_AUTH_SOCK=/port ubuntu
+    docker run --volume $SSH_AUTH_SOCK:/sock --env SSH_AUTH_SOCK=/sock ubuntu
 
-And similarly in a `docker-compose.yml` like this:
+Alternatively, you can do this in a `docker-compose.yml` as well:
 
     version: "2"
     services:
       example_service:
         build: .
         environment:
-          - SSH_AUTH_SOCK=/port
+          - SSH_AUTH_SOCK=/sock
         volumes:
-          - $SSH_AUTH_SOCK:/port
-          - .:/code
+          - $SSH_AUTH_SOCK:/sock
