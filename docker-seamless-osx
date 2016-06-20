@@ -205,7 +205,8 @@ install_shell_environment() {
 
   command="docker-seamless-osx env $DOCKER_SEAMLESS_OSX_TARGET_MACHINE"
   remove_shell_environment_line
-  echo $"\neval \$($command)" >> "$DOCKER_SEAMLESS_OSX_PROFILE"
+  echo >> "$DOCKER_SEAMLESS_OSX_PROFILE"
+  echo "eval \$($command)" >> "$DOCKER_SEAMLESS_OSX_PROFILE"
 }
 
 uninstall_shell_environment() {
