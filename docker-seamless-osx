@@ -313,7 +313,7 @@ remove_port_forwarding_entries_from_virtualbox() {
   dump_command="VBoxManage showvminfo $DOCKER_SEAMLESS_OSX_TARGET_MACHINE"
   $dump_command | grep "NIC 1 Rule" | grep "docker-seamless-osx-" | while read entry; do
     name=$(echo "$entry" | awk '{print $6}' | awk -F, '{print $1}')
-    VBoxManage controlvm $DOCKER_MACHINE_NAME natpf1 delete $name
+    VBoxManage controlvm $DOCKER_SEAMLESS_OSX_TARGET_MACHINE natpf1 delete $name
   done
 }
 
