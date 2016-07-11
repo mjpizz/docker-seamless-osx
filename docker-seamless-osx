@@ -142,9 +142,19 @@ ensure_docker_machine_is_running() {
     exit 1
   fi
 
-  if [ $(\docker-machine status $machine) = Stopped ]; then
-    \docker-machine start $machine | while read line; do log "--> $line"; done
-  fi
+  status=$(\docker-machine status $machine)
+  case $status in
+
+    Paused)
+      \docker-machine resume $machine | while read line; do log "--> $line"; done
+      ;;
+
+    Saved|Stopped|Stopping)
+      \docker-machine start $machine | while read line; do log "--> $line"; done
+      ;;
+
+  esac
+
 }
 
 ensure_docker_machine_is_stopped() {
