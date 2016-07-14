@@ -3,6 +3,19 @@
 
 Make docker tools behave natively on OSX using `docker-seamless-osx`.
 
+## Installation
+
+To install, run these commands in your terminal:
+
+    dest=/usr/local/bin/docker-seamless-osx && curl https://raw.githubusercontent.com/mjpizz/docker-seamless-osx/master/docker-seamless-osx > $dest && chmod +x $dest
+    docker-seamless-osx install
+
+To uninstall:
+
+    docker-seamless-osx uninstall
+
+## Why use this tool?
+
 | When you want to... | Usually you have to...  | `docker-seamless-osx` |
 | :--- | :--- | :--- |
 | Use `docker` and `docker-compose` commandline tools | Manually run `eval $(docker-machine env default)` before commandline tools will function  | **Automatic** by installing `eval` command in ~/.profile  |
@@ -11,17 +24,6 @@ Make docker tools behave natively on OSX using `docker-seamless-osx`.
 | Resolve DNS properly, particularly when using a VPN | Manually stopping Docker Machine and modifying VirtualBox resolver using `VBoxManage modifyvm $DOCKER_MACHINE_NAME --natdnshostresolver1 on` | **Automatic** by modifying VirtualBox resolver during installation |
 
 **What about Docker for Mac Beta?** As of June 2016, the Docker team is still improving the beta, which currently [cannot share SSH_AUTH_SOCK yet](https://forums.docker.com/t/can-we-re-use-the-osx-ssh-agent-socket-in-a-container/8152/5) and it also [doesn't handle DNS resolution in all cases yet](https://forums.docker.com/t/docker-for-mac-host-vpn-dns-dont-cooperate/8149).
-
-## Installation
-
-To install:
-
-    dest=/usr/local/bin/docker-seamless-osx && curl https://raw.githubusercontent.com/mjpizz/docker-seamless-osx/master/docker-seamless-osx > $dest && chmod +x $dest
-    docker-seamless-osx install
-
-To uninstall:
-
-    docker-seamless-osx uninstall
 
 ## When is SSH agent forwarding useful?
 
