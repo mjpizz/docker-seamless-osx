@@ -3,7 +3,7 @@
 
 Make docker tools behave natively on OSX using `docker-seamless-osx`.
 
-## Installation
+## How do I install it?
 
 To install, run these commands in your terminal:
 
