@@ -2,7 +2,7 @@
 
 set -e
 
-DOCKER_SEAMLESS_OSX_PROFILE=~/.profile
+DOCKER_SEAMLESS_OSX_PROFILE=${DOCKER_SEAMLESS_OSX_PROFILE:-~/.profile}
 DOCKER_SEAMLESS_OSX_SSH_AGENT_SOCK=/tmp/docker-seamless-osx-ssh-agent.sock
 DOCKER_SEAMLESS_OSX_SETTINGS_DIR=~/Library/Application\ Support/docker-seamless-osx
 
